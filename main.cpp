@@ -101,7 +101,7 @@ private:
     // checks to see whether a nearby stone is in a group, then we add
     // the stone into it if it exists. if not, make a new one.
     void add_stone_to_group(char x, char y) {
-        for (StoneGroup group : stone_groups) {
+        for (StoneGroup& group : stone_groups) {
             for (Stone stone : group.stones) {
                 if (stone.y == y + 1 or 
                     stone.y == y - 1 or
@@ -111,7 +111,6 @@ private:
                     if (stone.side == side) {
                         Stone new_stone(side, x, y);
                         group.stones.push_back(new_stone);
-                        group.print_group();
                         return;
                     }
                 }
@@ -127,6 +126,11 @@ private:
     
 
     void pass_turn() {
+        std::cout << "Groups:\n";
+        for (StoneGroup group : stone_groups) {
+            group.print_group();
+        }
+
         if (side == 'X') {
             side = 'O';
         } else {
@@ -143,7 +147,4 @@ int main() {
     board.make_move(9, 1);
     board.make_move(4, 5);
     board.print_board();
-    for (StoneGroup group : board.stone_groups) {
-        group.print_group();
-    }
 }
