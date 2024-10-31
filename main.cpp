@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <ostream>
@@ -11,6 +10,14 @@ struct Location {
     Location(char x_init, char y_init) {
         x = x_init;
         y = y_init;
+    }
+
+    bool operator==(const Location& other) const {
+        if (x == other.x and y == other.y) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
 };
@@ -91,22 +98,26 @@ struct StoneGroup {
 class Board {
 
 public:
-    char board[9][9];
+    char board[11][11]; // The board is actually a 9x9. This is for liberty checking
     char side = 'X';
     std::vector<StoneGroup> stone_groups;
-    std::vector<Stone> move_stack; // TODO: test this
+    std::vector<Stone> move_stack; 
+    std::vector<Location> legal_moves;
+    int captures = 0;
 
     void print_board() {
-        for (int y = 8; y >= 0; y--) {
-            for (int x = 0; x < 9; x++) {
+        std::cout << "\t";
+        for (int y = 9; y >= 1; y--) {
+            for (int x = 1; x <= 9; x++) {
                 std::cout << board[y][x] << " ";
             }
-            std::cout << y + 1 << "\n";
+            std::cout << y << "\n\t";
         }
-        for (char i = 65; i < 65 + 9; i++) {
-            std::cout << i << " ";
+        
+        for (char i = 1; i <= 9; i++) {
+            std::cout << +i << " ";
         }
-        std::cout << "\n\n";
+        std::cout << "\n\n\t ";
         if (side == 'X') {
             std::cout << "Black to move (X)\n\n";
         } else {
@@ -119,19 +130,47 @@ public:
             pass_turn(); // we will use x = 0 for passing moves.
             return;
         }
-        place_stone(x, y);
+        Location move(x, y);
+        gen_legal_moves();
+        bool is_legal_move = false;
+        for (Location mv : legal_moves) {
+            if (mv == move) {
+                is_legal_move = true;
+                break;
+            }
+        }
+        if (not is_legal_move) {
+            std::cout << "Illegal move: " << +x << " " << +y << std::endl;
+        }
+        else {
+            place_stone(x, y);
+        }
     }
 
+    // will put legal moves into the legal_moves vector
+    void gen_legal_moves() {
+        for (int y = 1; y <= 9; y++) {
+            for (int x = 1; x <= 9; x++) {
+                if (board[y][x] == '-') {
+                    legal_moves.push_back(Location(x, y));
+                }
+            }
+        }
+    }
 
     Board() {
         empty_board();
+        gen_legal_moves();
     }
 private:
 
     void empty_board() {
-        for (int x = 0; x < 9; x++) {
-            for (int y = 0; y < 9; y++) {
+        for (int x = 0; x < 11; x++) {
+            for (int y = 0; y < 11; y++) {
                 board[y][x] = '-';
+                if (x < 1 or x > 9 or y < 1 or y > 9) {
+                    board[y][x] = '.';
+                }
             }
         }
     }
@@ -141,7 +180,7 @@ private:
             std::cout << "we shouldn't be here";
             return;
         }
-        board[y-1][x-1] = side;
+        board[y][x] = side;
         move_stack.push_back(Stone(side, x, y));
         add_stone_to_group(x, y);
         pass_turn();
@@ -223,21 +262,40 @@ private:
         if (s.liberties.size() > 0) {
             s.liberties.clear();
         }
-        for (Stone stone : s.stones) {
-            if (board[stone.y-1][stone.x-2] == '-') s.liberties.push_back(Location(stone.x-1,stone.y));
-            if (board[stone.y-2][stone.x-1] == '-') s.liberties.push_back(Location(stone.x,stone.y-1));
-            if (board[stone.y-1][stone.x] == '-') s.liberties.push_back(Location(stone.x+1,stone.y));
-            if (board[stone.y][stone.x-1] == '-') s.liberties.push_back(Location(stone.x,stone.y+1));
+        for (Stone stone : s.stones) { 
+            //If we weren't planning on a dynamic system, this would be unnecessary, since
+            //you could just check to see if the group has at least one liberty
+            //and it'd alive at that point.
+            if (board[stone.y][stone.x-1] == '-') s.liberties.push_back(Location(stone.x-1,stone.y));
+            if (board[stone.y-1][stone.x] == '-') s.liberties.push_back(Location(stone.x,stone.y-1));
+            if (board[stone.y][stone.x+1] == '-') s.liberties.push_back(Location(stone.x+1,stone.y));
+            if (board[stone.y+1][stone.x] == '-') s.liberties.push_back(Location(stone.x,stone.y+1));
+        }
+
+        if (s.liberties.size() == 0) {
+            capture_stone_group(s);
         }
 
     }
 
+    void capture_stone_group(StoneGroup& s) {
+        captures++;
+        for (Stone stone : s.stones) {
+            board[stone.y][stone.x] = '-';
+        }
+        for (int i = 0; i < stone_groups.size(); i++) {
+            if (stone_groups[i] == s) {
+                stone_groups.erase(stone_groups.begin() + i);
+            }
+        }
+    }
+
     void pass_turn() {
+        /*
         std::cout << "\tGroups:\n";
         for (StoneGroup group : stone_groups) {
             group.print_group();
-        }
-        print_board();
+        }*/
 
         if (side == 'X') {
             side = 'O';
@@ -250,18 +308,15 @@ private:
 };
 
 int main() {
+    srand(3);
+    
     Board board;
-    board.make_move(3, 5);
-    board.make_move(8, 2);
-    board.make_move(5, 5);
-    board.make_move(8, 4);
-    board.make_move(4, 6);
-    board.make_move(8, 3);
-    board.make_move(4, 7);
-    board.make_move(5, 4);
-    board.make_move(4,5);
-    board.print_board();
-    for (Stone move : board.move_stack) {
-        move.print();
+    for (int i = 0; i < 70; i++) {
+        board.gen_legal_moves();
+        Location loc = board.legal_moves[std::rand() % board.legal_moves.size()];
+        board.make_move(loc.x, loc.y);
     }
+    board.print_board();
+    std::cout << board.captures << "\n";
+
 }
