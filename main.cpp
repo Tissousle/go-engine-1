@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <ostream>
 #include <vector>
 
 struct Location {
@@ -29,6 +30,17 @@ struct Stone : Location {
             std::cout << "White Stone:\tx: " << +x << "\ty: " << +y << "\n";
         }
     }
+
+    bool operator==(const Stone& other) const {
+        if ((x == other.x) and (y == other.y) and (side == other.side)) {
+            return true;
+        }
+        else 
+        {
+            return false;
+        }
+    }
+
 };
 
 struct StoneGroup {
@@ -36,15 +48,15 @@ struct StoneGroup {
     std::vector<Location> liberties;
     char side = '-';
 
-    void print_group() {
+    void print_group() const {
 
-        std::cout << stones.size() << " stone(s) in the " << side << " group:\n";
+        std::cout << stones.size() << " stone(s) in the " << side << " group with " << liberties.size() << " liberties:\n";
         for (Stone stone : stones) {
             stone.print();
         }
     }
 
-    StoneGroup merge_groups(StoneGroup& s) {
+    StoneGroup merge_groups(const StoneGroup& s) const {
         StoneGroup novie(stones[0].side);
         for (Stone stone : s.stones) {
             novie.stones.push_back(stone);
@@ -57,6 +69,21 @@ struct StoneGroup {
 
     StoneGroup(char side_init) {
         side = side_init;
+    }
+
+    bool operator==(const StoneGroup& other) const {
+        if (other.stones.size() != stones.size()) {
+            return false;
+        }
+        for (int i = 0; i < stones.size(); i++) {
+            if (not (other.stones[i] == stones[i])) {
+                return false;
+            }
+        }
+        if (other.side != side) {
+            return false;
+        }
+        return true;
     }
 
 };
@@ -124,60 +151,64 @@ private:
     // checks to see whether a nearby stone is in a group, then we add
     // the stone into it if it exists. if not, make a new one.
     void add_stone_to_group(char x, char y) {
-        std::vector<StoneGroup*> groupsAdded;
+        std::vector<StoneGroup> groupsAdded;
         bool addedGroup = false;
         for (StoneGroup& group : stone_groups) {
             for (Stone stone : group.stones) {
-                if (stone.y == y + 1 or 
-                    stone.y == y - 1 or
-                    stone.x == x - 1 or
-                    stone.x == x + 1) // check adjacent
+                if ((stone.y == y + 1 and stone.x == x) or 
+                    (stone.y == y - 1 and stone.x == x) or
+                    (stone.x == x - 1 and stone.y == y) or
+                    (stone.x == x + 1 and stone.y == y)) // check adjacent
                 {
                     if (stone.side == side) {
-                        groupsAdded.push_back(&group);
                         if (not addedGroup) { // We don't want duplicates when merging groups.
                             Stone new_stone(side, x, y);
                             group.stones.push_back(new_stone);
-                            update_liberties(group);
                         }
+                        groupsAdded.push_back(group);
                         addedGroup = true; // set flag
                     }
                 }
             }
         }
+
+
+        while (groupsAdded.size() > 1) {
+
+            StoneGroup s1 = groupsAdded[groupsAdded.size()-1];
+            StoneGroup s2 = groupsAdded[groupsAdded.size()-2];
+
+            StoneGroup s3 = s1.merge_groups(s2);
+
+           
+
+            for (int i = 0; i < stone_groups.size(); i++) {
+                if (stone_groups[i] == s1) {
+                    stone_groups.erase(stone_groups.begin() + i);
+                    break;
+                }
+            }
+            for (int i = 0; i < stone_groups.size(); i++) {
+                if (stone_groups[i] == s2) {
+                    stone_groups.erase(stone_groups.begin() + i);
+                    break;
+                } 
+            }
+
+            groupsAdded.pop_back();
+            groupsAdded.pop_back();
+
+            groupsAdded.push_back(s3);
+            stone_groups.push_back(s3);
+
+        }
+
         for (StoneGroup& group : stone_groups) {
             update_liberties(group); // We need to do this outside incase of mergers.
         }
 
-        if (groupsAdded.size() > 1) { //mergers. oh boy
-            while (groupsAdded.size() > 1) {
-
-                StoneGroup* s1 = groupsAdded[groupsAdded.size()-1];
-                StoneGroup* s2 = groupsAdded[groupsAdded.size()-2];
-
-                StoneGroup s3 = s1->merge_groups(*s2);
-
-                groupsAdded.pop_back();
-                groupsAdded.pop_back();
-
-                for (int index = 0; index < stone_groups.size(); index++) {
-                    if (&stone_groups[index] == s1) {
-                        stone_groups.erase(stone_groups.begin() + index);
-                    }
-
-                    if (&stone_groups[index] == s2) {
-                        stone_groups.erase(stone_groups.begin() + index);
-                    }
-                }
-                groupsAdded.push_back(&s3);
-                stone_groups.push_back(s3);
-
-            }
-            
-        }
-
         // what? no stone groups match? make a new one.
-        if (not addedGroup) {
+        if (groupsAdded.size() == 0) {
             StoneGroup s(side);
             Stone stone(side, x, y);
             s.stones.push_back(stone);
@@ -188,9 +219,9 @@ private:
 
     // Right now, this just clears the liberties of a group and then recreates them.
     // TODO: make this dynamic
-    void update_liberties(StoneGroup s) {
-        if (s.stones.size() > 0) {
-            s.stones.clear();
+    void update_liberties(StoneGroup& s) {
+        if (s.liberties.size() > 0) {
+            s.liberties.clear();
         }
         for (Stone stone : s.stones) {
             if (board[stone.y-1][stone.x-2] == '-') s.liberties.push_back(Location(stone.x-1,stone.y));
@@ -199,17 +230,14 @@ private:
             if (board[stone.y][stone.x-1] == '-') s.liberties.push_back(Location(stone.x,stone.y+1));
         }
 
-        if (s.liberties.size() < 0) {
-
-        }
-
     }
 
     void pass_turn() {
-        std::cout << "Groups:\n";
+        std::cout << "\tGroups:\n";
         for (StoneGroup group : stone_groups) {
             group.print_group();
         }
+        print_board();
 
         if (side == 'X') {
             side = 'O';
@@ -224,10 +252,14 @@ private:
 int main() {
     Board board;
     board.make_move(3, 5);
-    board.make_move(9, 1);
+    board.make_move(8, 2);
     board.make_move(5, 5);
-    board.make_move(0, 99);
-    board.make_move(4, 5);
+    board.make_move(8, 4);
+    board.make_move(4, 6);
+    board.make_move(8, 3);
+    board.make_move(4, 7);
+    board.make_move(5, 4);
+    board.make_move(4,5);
     board.print_board();
     for (Stone move : board.move_stack) {
         move.print();
