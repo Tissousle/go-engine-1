@@ -116,18 +116,31 @@ struct StoneGroup {
         }
     }
 
+    void remove_duplicate_liberties()  {
+        for (Location liberty : liberties) {
+            for (int i = 0; i < liberties.size(); i++) {
+                if (liberty == liberties[i]) {
+                    liberties[i].x = 0;
+                }
+            }
+        }
+        for (int i=0; i < liberties.size(); i++) {
+            if (liberties[i].x == 0)
+                liberties.erase(liberties.begin() + i);
+        }
+
+    }
+
 };
 
 class Board {
 
 public:
     char board[11][11]; // The board is actually a 9x9. This is for liberty checking
-    char test_board[11][11];
     char side = 'X';
     std::vector<StoneGroup> stone_groups;
     std::vector<Stone> move_stack; 
     std::vector<Location> legal_moves;
-    int captures = 0;
 
     void print_board() {
         std::cout << "\t";
@@ -178,12 +191,200 @@ public:
         for (int y = 1; y <= 9; y++) {
             for (int x = 1; x <= 9; x++) {
                 if (board[y][x] == '-') {
-                    legal_moves.push_back(Location(x, y));
+                    Board z = clone();
+                    z.place_stone(x, y);
+                    if (z.board[y][x] != '-') {
+                        legal_moves.push_back(Location(x, y));
+                    }
+
                 }
             }
         }
     }
 
+
+    Board() {
+        empty_board();
+    }
+
+    Board clone() const {
+        Board x;
+        for (int i = 0; i < 11; i++) {
+            for (int j = 0; j < 11; j++) {
+                x.board[i][j] = board[i][j];
+            }
+        }
+        x.side = side;
+        x.stone_groups = std::vector(stone_groups);
+        x.move_stack = std::vector(move_stack);
+
+        return x;
+    }
+private:
+    void empty_board() {
+        for (int x = 0; x < 11; x++) {
+            for (int y = 0; y < 11; y++) {
+                board[y][x] = '-';
+                if (x < 1 or x > 9 or y < 1 or y > 9) {
+                    board[y][x] = '.';
+                }
+            }
+        }
+    }
+
+    void place_stone(char x, char y) {
+        if (x > 9 or x < 1 or y > 9 or y < 1) {
+            std::cout << "we shouldn't be here";
+            return;
+        }
+        board[y][x] = side;
+        move_stack.push_back(Stone(side, x, y));
+        if (not add_stone_to_group(x, y)) {
+            create_group(x, y);
+        }
+        for (StoneGroup& group : stone_groups) {
+            if (group.side != side) {
+                if (update_liberties(group) == 0) {
+                    capture_stone_group(group);
+                }
+            }
+        }
+
+        for (StoneGroup& group : stone_groups) {
+            if (group.side == side) {
+                if (update_liberties(group) == 0) {
+                    capture_stone_group(group);
+                }
+            }
+        }
+        pass_turn();
+    }
+
+    std::vector<StoneGroup> merge_loop(std::vector<StoneGroup> groupsAdded) {
+
+        while (groupsAdded.size() > 1) {
+
+            StoneGroup s1 = groupsAdded[groupsAdded.size()-1];
+            StoneGroup s2 = groupsAdded[groupsAdded.size()-2];
+
+            StoneGroup s3 = s1.merge_groups(s2);
+
+            for (int i = 0; i < stone_groups.size(); i++) {
+                if (stone_groups[i] == s1) {
+                    stone_groups.erase(stone_groups.begin() + i);
+                    break;
+                }
+            }
+            for (int i = 0; i < stone_groups.size(); i++) {
+                if (stone_groups[i] == s2) {
+                    stone_groups.erase(stone_groups.begin() + i);
+                    break;
+                } 
+            }
+
+            groupsAdded.pop_back();
+            groupsAdded.pop_back();
+
+            s3.remove_duplicates(); // don't know why they happen. But they do
+
+            groupsAdded.push_back(s3);
+            stone_groups.push_back(s3);
+
+        }
+        return groupsAdded;
+    }
+
+    // x, y are the position of the stone we're adding
+    // checks to see whether a nearby stone is in a group, then we add
+    // the stone into it if it exists. if not, make a new one.
+    bool add_stone_to_group(char x, char y) {
+        std::vector<StoneGroup> groupsAdded;
+        bool addedGroup = false;
+        for (StoneGroup& group : stone_groups) {
+            for (Stone stone : group.stones) {
+                if ((stone.y == y + 1 and stone.x == x) or 
+                    (stone.y == y - 1 and stone.x == x) or
+                    (stone.x == x - 1 and stone.y == y) or
+                    (stone.x == x + 1 and stone.y == y)) // check adjacent
+                {
+                    if (stone.side == side) {
+                        if (not addedGroup) { // We don't want duplicates when merging groups.
+                            Stone new_stone(side, x, y);
+                            group.stones.push_back(new_stone);
+                        }
+                        groupsAdded.push_back(group);
+                        addedGroup = true; // set flag
+                    }
+                }
+            }
+        }
+
+        groupsAdded = merge_loop(groupsAdded);
+
+        return groupsAdded.size() > 0;
+
+    }
+
+    void create_group(char x, char y) {
+        StoneGroup s(side);
+        Stone stone(side, x, y);
+        s.stones.push_back(stone);
+        stone_groups.push_back(s);
+    }
+
+    // Right now, this just clears the liberties of a group and then recreates them.
+    // TODO: make this dynamic (far into the future)
+    int update_liberties(StoneGroup& s) {
+        s.liberties.clear();
+        for (Stone stone : s.stones) { 
+            //If we weren't planning on a dynamic system, this would be unnecessary, since
+            //you could just check to see if the group has at least one liberty
+            //and it'd alive at that point.
+            if (board[stone.y][stone.x-1] == '-') s.liberties.push_back(Location(stone.x-1,stone.y));
+            if (board[stone.y-1][stone.x] == '-') s.liberties.push_back(Location(stone.x,stone.y-1));
+            if (board[stone.y][stone.x+1] == '-') s.liberties.push_back(Location(stone.x+1,stone.y));
+            if (board[stone.y+1][stone.x] == '-') s.liberties.push_back(Location(stone.x,stone.y+1));
+        }
+
+        //s.remove_duplicate_liberties();
+
+        return s.liberties.size();
+
+
+    }
+
+    void capture_stone_group(StoneGroup& s) {
+        for (Stone stone : s.stones) {
+            board[stone.y][stone.x] = '-';
+        }
+        for (int i = 0; i < stone_groups.size(); i++) {
+            if (stone_groups[i] == s) {
+                stone_groups.erase(stone_groups.begin() + i);
+            }
+        }
+    }
+
+    void pass_turn() {
+        /*
+        std::cout << "\tGroups:\n";
+        for (StoneGroup group : stone_groups) {
+            group.print_group();
+        }*/
+
+        if (side == 'X') {
+            side = 'O';
+        } else {
+            side = 'X';
+        }
+
+    }
+
+};
+
+class TestBoard : public Board {
+
+public:
+    char test_board[11][11];
     void update_test_board_to_stonegroups() {
         //empty board
         for (int x = 0; x < 11; x++) {
@@ -228,164 +429,15 @@ public:
             std::cout << "White to move (O)\n\n";
         }
     }
-
-    Board() {
-        empty_board();
-        gen_legal_moves();
-    }
-private:
-
-    void empty_board() {
-        for (int x = 0; x < 11; x++) {
-            for (int y = 0; y < 11; y++) {
-                board[y][x] = '-';
-                if (x < 1 or x > 9 or y < 1 or y > 9) {
-                    board[y][x] = '.';
-                }
-            }
-        }
-    }
-
-    void place_stone(char x, char y) {
-        if (x > 9 or x < 1 or y > 9 or y < 1) {
-            std::cout << "we shouldn't be here";
-            return;
-        }
-        board[y][x] = side;
-        move_stack.push_back(Stone(side, x, y));
-        add_stone_to_group(x, y);
-        pass_turn();
-    }
-
-    // x, y are the position of the stone we're adding
-    // checks to see whether a nearby stone is in a group, then we add
-    // the stone into it if it exists. if not, make a new one.
-    void add_stone_to_group(char x, char y) {
-        std::vector<StoneGroup> groupsAdded;
-        bool addedGroup = false;
-        for (StoneGroup& group : stone_groups) {
-            for (Stone stone : group.stones) {
-                if ((stone.y == y + 1 and stone.x == x) or 
-                    (stone.y == y - 1 and stone.x == x) or
-                    (stone.x == x - 1 and stone.y == y) or
-                    (stone.x == x + 1 and stone.y == y)) // check adjacent
-                {
-                    if (stone.side == side) {
-                        if (not addedGroup) { // We don't want duplicates when merging groups.
-                            Stone new_stone(side, x, y);
-                            group.stones.push_back(new_stone);
-                        }
-                        groupsAdded.push_back(group);
-                        addedGroup = true; // set flag
-                    }
-                }
-            }
-        }
-
-
-        while (groupsAdded.size() > 1) {
-
-            StoneGroup s1 = groupsAdded[groupsAdded.size()-1];
-            StoneGroup s2 = groupsAdded[groupsAdded.size()-2];
-
-            StoneGroup s3 = s1.merge_groups(s2);
-
-           
-
-            for (int i = 0; i < stone_groups.size(); i++) {
-                if (stone_groups[i] == s1) {
-                    stone_groups.erase(stone_groups.begin() + i);
-                    break;
-                }
-            }
-            for (int i = 0; i < stone_groups.size(); i++) {
-                if (stone_groups[i] == s2) {
-                    stone_groups.erase(stone_groups.begin() + i);
-                    break;
-                } 
-            }
-
-            groupsAdded.pop_back();
-            groupsAdded.pop_back();
-
-            s3.remove_duplicates();
-
-            groupsAdded.push_back(s3);
-            stone_groups.push_back(s3);
-
-        }
-
-        for (StoneGroup& group : stone_groups) {
-            update_liberties(group); // We need to do this outside incase of mergers.
-        }
-
-        // what? no stone groups match? make a new one.
-        if (groupsAdded.size() == 0) {
-            StoneGroup s(side);
-            Stone stone(side, x, y);
-            s.stones.push_back(stone);
-            update_liberties(s);
-            stone_groups.push_back(s);
-        }
-    }
-
-    // Right now, this just clears the liberties of a group and then recreates them.
-    // TODO: make this dynamic
-    void update_liberties(StoneGroup& s) {
-        if (s.liberties.size() > 0) {
-            s.liberties.clear();
-        }
-        for (Stone stone : s.stones) { 
-            //If we weren't planning on a dynamic system, this would be unnecessary, since
-            //you could just check to see if the group has at least one liberty
-            //and it'd alive at that point.
-            if (board[stone.y][stone.x-1] == '-') s.liberties.push_back(Location(stone.x-1,stone.y));
-            if (board[stone.y-1][stone.x] == '-') s.liberties.push_back(Location(stone.x,stone.y-1));
-            if (board[stone.y][stone.x+1] == '-') s.liberties.push_back(Location(stone.x+1,stone.y));
-            if (board[stone.y+1][stone.x] == '-') s.liberties.push_back(Location(stone.x,stone.y+1));
-        }
-
-        if (s.liberties.size() == 0) {
-            capture_stone_group(s);
-        }
-
-    }
-
-    void capture_stone_group(StoneGroup& s) {
-        captures++;
-        for (Stone stone : s.stones) {
-            board[stone.y][stone.x] = '-';
-        }
-        for (int i = 0; i < stone_groups.size(); i++) {
-            if (stone_groups[i] == s) {
-                stone_groups.erase(stone_groups.begin() + i);
-            }
-        }
-    }
-
-    void pass_turn() {
-        /*
-        std::cout << "\tGroups:\n";
-        for (StoneGroup group : stone_groups) {
-            group.print_group();
-        }*/
-
-        if (side == 'X') {
-            side = 'O';
-        } else {
-            side = 'X';
-        }
-
-    }
-
 };
 
 int main() {
     srand(3);
-    
-    Board board;
+
+    TestBoard board;
+    board.gen_legal_moves();
     srand(1);
-    for (int i = 0; i < 70; i++) {
+    for (int i = 0; i < 50; i++) {
 
         Location loc = board.legal_moves[std::rand() % board.legal_moves.size()];
 
@@ -413,9 +465,9 @@ int main() {
         x = x - 48;
         y = y - 48;
         board.make_move(x, y);
-        board.print_board();
+        board.update_test_board_to_stonegroups();
+        board.print_test_board_and_regular_board();
     }
     board.print_board();
-    std::cout << "captures: "<<board.captures << "\n";
 
 }
