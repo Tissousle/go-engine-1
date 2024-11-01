@@ -117,16 +117,19 @@ struct StoneGroup {
     }
 
     void remove_duplicate_liberties()  {
-        for (Location liberty : liberties) {
+        for (int j = 0; j < liberties.size(); j++) {
             for (int i = 0; i < liberties.size(); i++) {
-                if (liberty == liberties[i]) {
+                if (j == i) continue;
+                if (liberties[j] == liberties[i]) {
                     liberties[i].x = 0;
                 }
             }
         }
         for (int i=0; i < liberties.size(); i++) {
-            if (liberties[i].x == 0)
+            if (liberties[i].x == 0) {
                 liberties.erase(liberties.begin() + i);
+                i--;
+            }
         }
 
     }
@@ -242,18 +245,11 @@ private:
         if (not add_stone_to_group(x, y)) {
             create_group(x, y);
         }
-        for (StoneGroup& group : stone_groups) {
-            if (group.side != side) {
-                if (update_liberties(group) == 0) {
-                    capture_stone_group(group);
-                }
-            }
-        }
-
-        for (StoneGroup& group : stone_groups) {
-            if (group.side == side) {
-                if (update_liberties(group) == 0) {
-                    capture_stone_group(group);
+        for (int i = 0; i < stone_groups.size(); i++) {
+            if (stone_groups[i].side != side) {
+                if (update_liberties(stone_groups[i]) == 0) {
+                    capture_stone_group(stone_groups[i]);
+                    i--;
                 }
             }
         }
@@ -346,7 +342,7 @@ private:
             if (board[stone.y+1][stone.x] == '-') s.liberties.push_back(Location(stone.x,stone.y+1));
         }
 
-        //s.remove_duplicate_liberties();
+        s.remove_duplicate_liberties();
 
         return s.liberties.size();
 
@@ -460,6 +456,9 @@ int main() {
             std::cout << "Groups:\n";
             for (StoneGroup group : board.stone_groups) {
                 group.print_group();
+                for (Location liberty : group.liberties) {
+                    liberty.print();
+                }
             }
         }
         x = x - 48;
