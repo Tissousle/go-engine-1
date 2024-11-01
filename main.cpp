@@ -12,6 +12,10 @@ struct Location {
         y = y_init;
     }
 
+    void print() {
+        std::cout << "Location -- x: " << +x << " y: " << +y << std::endl;
+    }
+
     bool operator==(const Location& other) const {
         if (x == other.x and y == other.y) {
             return true;
@@ -93,12 +97,32 @@ struct StoneGroup {
         return true;
     }
 
+    void remove_duplicates() {
+        for (int i = 0; i < stones.size(); i++) {
+            for (int j = 0; j < stones.size(); j++){
+                if (i == j) {
+                    continue;
+                }
+                if (stones[i] == stones[j]) {
+                    stones[j].x = 0;
+                }
+            }
+        }
+        for (int i = 0; i < stones.size(); i++) {
+            if (stones[i].x == 0) {
+                stones.erase(stones.begin() + i);
+                i--;
+            }
+        }
+    }
+
 };
 
 class Board {
 
 public:
     char board[11][11]; // The board is actually a 9x9. This is for liberty checking
+    char test_board[11][11];
     char side = 'X';
     std::vector<StoneGroup> stone_groups;
     std::vector<Stone> move_stack; 
@@ -111,8 +135,9 @@ public:
             for (int x = 1; x <= 9; x++) {
                 std::cout << board[y][x] << " ";
             }
-            std::cout << y << "\n\t";
+            std::cout << " " << y << "\n\t";
         }
+        std::cout << "\n\t";
         
         for (char i = 1; i <= 9; i++) {
             std::cout << +i << " ";
@@ -149,12 +174,58 @@ public:
 
     // will put legal moves into the legal_moves vector
     void gen_legal_moves() {
+        legal_moves.clear();
         for (int y = 1; y <= 9; y++) {
             for (int x = 1; x <= 9; x++) {
                 if (board[y][x] == '-') {
                     legal_moves.push_back(Location(x, y));
                 }
             }
+        }
+    }
+
+    void update_test_board_to_stonegroups() {
+        //empty board
+        for (int x = 0; x < 11; x++) {
+            for (int y = 0; y < 11; y++) {
+                test_board[y][x] = '-';
+                if (x < 1 or x > 9 or y < 1 or y > 9) {
+                    test_board[y][x] = '.';
+                }
+            }
+        }
+        // add 
+        for (StoneGroup group : stone_groups) {
+            for (Stone stone : group.stones) {
+                if (test_board[stone.y][stone.x] != '-') { std::cout <<"x"; }
+                test_board[stone.y][stone.x] = stone.side;
+            }
+        }
+        std::cout<<"\n";
+    }
+
+    void print_test_board_and_regular_board() {
+
+        std::cout << "\t";
+        for (int y = 9; y >= 1; y--) {
+            for (int x = 1; x <= 9; x++) {
+                std::cout << board[y][x] << " ";
+            }
+            std::cout << " " << y << "\t\t\t";
+            for (int x = 1; x <= 9; x++) {
+                std::cout << test_board[y][x] << " ";
+            }
+            std::cout << " " << y << "\n\t";
+        }
+        std::cout << "\n\t";
+        for (char i = 1; i <= 9; i++) {
+            std::cout << +i << " ";
+        }
+        std::cout << "\n\n\t\t\t\t ";
+        if (side == 'X') {
+            std::cout << "Black to move (X)\n\n";
+        } else {
+            std::cout << "White to move (O)\n\n";
         }
     }
 
@@ -237,6 +308,8 @@ private:
             groupsAdded.pop_back();
             groupsAdded.pop_back();
 
+            s3.remove_duplicates();
+
             groupsAdded.push_back(s3);
             stone_groups.push_back(s3);
 
@@ -311,12 +384,38 @@ int main() {
     srand(3);
     
     Board board;
+    srand(1);
     for (int i = 0; i < 70; i++) {
-        board.gen_legal_moves();
+
         Location loc = board.legal_moves[std::rand() % board.legal_moves.size()];
+
+        loc.print();
         board.make_move(loc.x, loc.y);
+        board.update_test_board_to_stonegroups();
+        board.print_test_board_and_regular_board();
+    }
+    /*for (Stone mv : board.move_stack) {
+        mv.print();
+    }*/
+    for (int i = 0; i < 50; i++) {
+        char x;
+        char y;
+        std::cout << "Enter x: ";
+        std::cin >> x;
+        std::cout << "Enter y: ";
+        std::cin >> y;
+        if (x == 48) {
+            std::cout << "Groups:\n";
+            for (StoneGroup group : board.stone_groups) {
+                group.print_group();
+            }
+        }
+        x = x - 48;
+        y = y - 48;
+        board.make_move(x, y);
+        board.print_board();
     }
     board.print_board();
-    std::cout << board.captures << "\n";
+    std::cout << "captures: "<<board.captures << "\n";
 
 }
