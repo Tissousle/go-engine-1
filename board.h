@@ -49,6 +49,8 @@ public:
     std::vector<StoneGroup> stone_groups;
     std::vector<Stone> move_stack; 
     std::vector<Location> legal_moves;
+    int capture_balance = -6; // komi. if the score is equal white will win (to account for 6.5).
+    Location ko = Location(0,15);
 
     void print_board();
 
@@ -56,6 +58,8 @@ public:
 
     // puts legal moves into the legal_moves vector
     void gen_legal_moves();
+
+    void make_random_move();
 
     Board clone() const;
 

@@ -1,5 +1,6 @@
 #include "board.h"
 #include <iostream>
+#include <cstdlib>
 
 
 Location::Location(char x_init, char y_init) {
@@ -164,18 +165,37 @@ void Board::make_move(char x, char y) {
 // will put legal moves into the legal_moves vector
 void Board::gen_legal_moves() {
     legal_moves.clear();
+    if (move_stack.size() > 1)
+        if (move_stack[move_stack.size()-1] == move_stack[move_stack.size()-2]) {
+            return;
+        }
+    legal_moves.push_back(Location(0,0));
     for (int y = 1; y <= 9; y++) {
         for (int x = 1; x <= 9; x++) {
             if (board[y][x] == '-') {
                 Board z = clone();
                 z.place_stone(x, y);
-                if (z.board[y][x] != '-') {
+                
+                if (z.board[y][x] != '-' and not (Location(x,y) == ko)) {
                     legal_moves.push_back(Location(x, y));
                 }
 
             }
         }
     }
+}
+
+void Board::make_random_move() {
+    gen_legal_moves();
+    if (not legal_moves.size()) {
+        return;
+    }
+    Location loc = legal_moves[std::rand() % legal_moves.size()];
+    if (loc == Location(0,0)) {
+        pass_turn();
+        return;
+    }
+    place_stone(loc.x, loc.y);
 }
 
 Board::Board() {
@@ -218,6 +238,14 @@ void Board::place_stone(char x, char y) {
     }
     for (int i = 0; i < stone_groups.size(); i++) {
         if (stone_groups[i].side != side) {
+            if (update_liberties(stone_groups[i]) == 0) {
+                capture_stone_group(stone_groups[i]);
+                i--;
+            }
+        }
+    }
+    for (int i = 0; i < stone_groups.size(); i++) {
+        if (stone_groups[i].side == side) { // We need this for suicide checking.
             if (update_liberties(stone_groups[i]) == 0) {
                 capture_stone_group(stone_groups[i]);
                 i--;
@@ -321,8 +349,10 @@ int Board::update_liberties(StoneGroup& s) {
 }
 
 void Board::capture_stone_group(StoneGroup& s) {
+    int mult = s.side == 'X' ? -1 : 1; // if white loses stones, +1. if black, -1. 
     for (Stone stone : s.stones) {
         board[stone.y][stone.x] = '-';
+        capture_balance += mult;
     }
     for (int i = 0; i < stone_groups.size(); i++) {
         if (stone_groups[i] == s) {

@@ -1,7 +1,7 @@
-#include <cstdlib>
 #include <iostream>
 #include <ostream>
-#include "board.h"
+#include "scoreboard.h"
+//#include "board.h" // redefinition error so let's not
 
 
 class TestBoard : public Board {
@@ -56,22 +56,18 @@ public:
 
 int main() {
     Board board;
-    board.gen_legal_moves();
-    srand(8);
-    for (int i = 0; i < 50; i++) {
-
-        Location loc = board.legal_moves[std::rand() % board.legal_moves.size()];
-
-        loc.print();
-        board.make_move(loc.x, loc.y);
+    srand(5);
+    for (int i = 0; i < 80; i++) {
+        board.make_random_move();
     }
-    for (int i = 0; i < 50; i++) {
+    /*for (int i = 0; i < 50; i++) {
         board.print_board();
+        //std::cout << board.capture_balance;
         char x;
         char y;
         std::cout << "Enter x: ";
         std::cin >> x;
-        std::cout << "Enter y: ";
+        std::cout << "Enter y: \n";
         std::cin >> y;
         if (x == 48) {
             std::cout << "Groups:\n";
@@ -85,7 +81,21 @@ int main() {
         x = x - 48;
         y = y - 48;
         board.make_move(x, y);
-    }
+    }*/
     board.print_board();
+
+    ScoreBoard sb(board);
+
+    bool result = sb.score_game();
+
+    sb.board.print_board();
+
+    if (result) {
+        std::cout << "Black wins!\n";
+    } else {
+        std::cout << "White wins!\n";
+    }
+
+    std::cout << sb.board.capture_balance << "points \n";
 
 }
